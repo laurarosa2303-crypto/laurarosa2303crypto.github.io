@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynasty Snake Game 🐍👑</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #2c3e50; /* Dark blue background */
+            font-family: 'Arial', sans-serif;
+            color: white;
+            flex-direction: column;
+        }
+
+        #info-bar {
+            width: 400px;
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 1.3em;
+            font-weight: bold;
+        }
+
+        #game-container {
+            display: none; /* Hidden until the game starts */
+            border: 5px solid #ecf0f1; /* Light border */
+            box-shadow: 0 0 25px rgba(0, 0, 0, 0.7);
+        }
+
+        canvas {
+            background-color: #34495e; /* Game area background */
+            display: block;
+        }
+
+        /* --- Modal/Screen Styles --- */
+        .game-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+
+        .modal-content {
+            background-color: #34495e;
+            padding: 40px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.9);
+            max-width: 80%;
+            min-width: 300px;
+        }
+
+        .modal-content h1, .modal-content h2 {
+            color: #2ecc71; /* Green title */
+        }
+
+        .modal-content ul {
+            list-style: none;
+            padding: 0;
+            margin: 20px 0;
+            font-size: 1.1em;
+        }
+
+        .modal-content li {
+            margin: 10px 0;
+            text-align: left;
+        }
+
+        .button, .quiz-option {
+            background-color: #e74c3c; /* Red button */
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 1.2em;
+            cursor: pointer;
+            border-radius: 5px;
+            margin: 5px;
+            transition: background-color 0.2s, transform 0.1s;
+            display: block;
+            width: 100%;
+            box-sizing: border-box;
+            text-align: left;
+        }
+
+        .quiz-option:hover {
+            background-color: #c0392b;
+            transform: scale(1.02);
+        }
+
+        .button:hover {
+            background-color: #2ecc71; /* Green on hover for Start/Restart */
+        }
+        
+        /* Quiz specific styles */
+        #quiz-question {
+            margin-bottom: 20px;
+            font-size: 1.3em;
+            color: #f1c40f; /* Yellow */
+        }
+
+        #quiz-options {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="info-bar">
+        <span id="score">Score: 0</span>
+        <span id="lives">Lives: 3</span>
+    </div>
+
+    <div id="game-container">
+        <canvas id="gameCanvas" width="400" height="400"></canvas>
+    </div>
+
+    <div id="rules-screen" class="game-modal">
+        <div class="modal-content">
+            <h1>🐍 Dynasty Snake Game 🍎</h1>
+            <h2>Rules of the Game:</h2>
+            <ul>
+                <li>➡️ **Use the arrow keys to move.**</li>
+                <li>🍎 **Eat apples** to grow and gain points. (Max capacity is determined by the board size.)</li>
+                <li>🧠 **Answer a history quiz** correctly after eating an apple to keep your dynasty alive!</li>
+                <li>🧱 **Do not crash into the walls** or your own body.</li>
+                <li>❤️ You have **3 Lives** (2 restarts) before the game resets.</li>
+                <li>🏆 Reach **10 Points** to win the game!</li>
+            </ul>
+            <button class="button" onclick="startGame()">Start Game</button>
+        </div>
+    </div>
+
+    <div id="quiz-modal" class="game-modal" style="display: none;">
+        <div class="modal-content">
+            <h2>Time for a Dynasty Quiz!</h2>
+            <p id="quiz-question"></p>
+            <div id="quiz-options">
+                </div>
+            <p id="quiz-message" style="margin-top: 15px; font-weight: bold;"></p>
+        </div>
+    </div>
+
+    <div id="win-screen" class="game-modal" style="display: none;">
+        <div class="modal-content">
+            <h2 style="color: #f1c40f;">👑 Victory Achieved! 👑</h2>
+            <p>You have mastered both the Serpent and the Dynasties!</p>
+            <p>Final Score: <span id="win-score" style="color: #2ecc71; font-size: 1.8em; font-weight: bold;"></span></p>
+            <p>Your Dynasty reigns supreme!</p>
+            <button class="button" onclick="resetGame()">Play Again</button>
+        </div>
+    </div>
+    
+    <div id="game-over-screen" class="game-modal" style="display: none;">
+        <div class="modal-content">
+            <h2 style="color: #e74c3c;">Game Over!</h2>
+            <p>Your final score was: <span id="final-score" style="color: #f1c40f; font-size: 1.5em;"></span></p>
+            <p id="game-over-message"></p>
+            <button class="button" onclick="resetGame()">Restart Game</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const gridSize = 20;
+        const tileCount = canvas.width / gridSize;
+        let snake = [{ x: 10, y: 10 }];
+        let apple = { x: 15, y: 15 };
+        let velocityX = 0;
+        let velocityY = 0;
+        let score = 0;
+        let lives = 2; // 2 extra lives, so 3 total attempts
+        let gameLoop;
+        let gameActive = false;
+        const WIN_SCORE = 10; // New winning condition
+
+        const infoScore = document.getElementById('score');
+        const infoLives = document.getElementById('lives');
+        const gameContainer = document.getElementById('game-container');
+        const rulesScreen = document.getElementById('rules-screen');
+        const quizModal = document.getElementById('quiz-modal');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const winScreen = document.getElementById('win-screen'); // Added win screen element
+
+        const quizQuestions = [
+            {
+                dynasty: "Tang Dynasty",
+                question: "Which major infrastructural project was considered essential to the Tang Dynasty's prosperity and trade?",
+                options: [
+                    "The Great Wall's Expansion",
+                    "The Grand Canal",
+                    "The Silk Road's Western Extension",
+                    "The Terracotta Army's construction"
+                ],
+                answer: "The Grand Canal"
+            },
+            {
+                dynasty: "Song Dynasty",
+                question: "The Song Dynasty is widely recognized as the first government in the world to issue what type of currency?",
+                options: [
+                    "Bronze coins",
+                    "Gold standard certificates",
+                    "Paper money (Jiaozi)",
+                    "Silver ingots"
+                ],
+                answer: "Paper money (Jiaozi)"
+            },
+            {
+                dynasty: "Korean Dynasties (Joseon)",
+                question: "During the Joseon Dynasty, what was the state ideology that was strongly encouraged, often leading to the suppression of Buddhism?",
+                options: [
+                    "Shamanism",
+                    "Neo-Confucianism",
+                    "Legalism",
+                    "Taoism"
+                ],
+                answer: "Neo-Confucianism"
+            },
+            {
+                dynasty: "South Asia (Mughal Empire)",
+                question: "The Mughal Empire, a major South Asian dynasty, was founded by a Turkic-Mongol prince descended from Timur and Genghis Khan. What was his name?",
+                options: [
+                    "Akbar",
+                    "Aurangzeb",
+                    "Shah Jahan",
+                    "Babur"
+                ],
+                answer: "Babur"
+            },
+            {
+                dynasty: "Tang Dynasty",
+                question: "The Tang Dynasty is traditionally regarded as the greatest age for what literary art form in China?",
+                options: [
+                    "Prose novels",
+                    "Poetry",
+                    "Historical chronicles",
+                    "Drama and plays"
+                ],
+                answer: "Poetry"
+            },
+            {
+                dynasty: "Song Dynasty",
+                question: "What major social practice, considered a sign of beauty and status, became popular among women during the Song Dynasty?",
+                options: [
+                    "Elaborate headdresses",
+                    "Foot binding",
+                    "Facial tattoos",
+                    "Public military service"
+                ],
+                answer: "Foot binding"
+            },
+             {
+                dynasty: "Korean Dynasties (Goguryeo)",
+                question: "Which early Korean kingdom famously defeated massive invasions from the Sui Dynasty and contributed to its collapse?",
+                options: [
+                    "Baekje",
+                    "Silla",
+                    "Goguryeo",
+                    "Gaya"
+                ],
+                answer: "Goguryeo"
+            },
+             {
+                dynasty: "South Asia (Mauryan Empire)",
+                question: "Which Mauryan Emperor, known for his conversion to Buddhism, spread the faith using stone edicts throughout his vast empire?",
+                options: [
+                    "Chandragupta",
+                    "Ashoka",
+                    "Samudragupta",
+                    "Bindusara"
+                ],
+                answer: "Ashoka"
+            }
+        ];
+        
+        // --- Game Flow Functions ---
+
+        function startGame() {
+            rulesScreen.style.display = 'none';
+            gameContainer.style.display = 'block';
+            resetGameInternal();
+            gameActive = true;
+            document.addEventListener('keydown', keyPush);
+            gameLoop = setInterval(game, 1000 / 15); // 15 FPS
+        }
+
+        function resetGameInternal() {
+            // Full reset for a new game
+            snake = [{ x: 10, y: 10 }];
+            velocityX = 1; // Start moving right
+            velocityY = 0;
+            score = 0;
+            lives = 2; // 2 extra lives (3 total attempts)
+            infoScore.textContent = `Score: 0`;
+            infoLives.textContent = `Lives: ${lives + 1}`; // Display 3
+            placeApple();
+            gameOverScreen.style.display = 'none';
+            winScreen.style.display = 'none'; // Hide win screen too
+        }
+
+        function resetGame() {
+            // Called by the restart button on Game Over or Win screens
+            clearInterval(gameLoop);
+            resetGameInternal();
+            gameActive = true;
+            gameLoop = setInterval(game, 1000 / 15);
+        }
+
+        function placeApple() {
+            // Ensures the apple does not spawn on the snake's body
+            let newApple;
+            do {
+                newApple = {
+                    x: Math.floor(Math.random() * tileCount),
+                    y: Math.floor(Math.random() * tileCount)
+                };
+            } while (snake.some(segment => segment.x === newApple.x && segment.y === newApple.y));
+            apple = newApple;
+        }
+
+        // --- Core Game Logic ---
+
+        function game() {
+            if (!gameActive) return;
+
+            // 1. Update Head Position
+            let head = { x: snake[0].x + velocityX, y: snake[0].y + velocityY };
+
+            // 2. Check for Wall Collision
+            if (head.x < 0 || head.x >= tileCount || head.y < 0 || head.y >= tileCount) {
+                handleCrash("wall");
+                return;
+            }
+
+            // 3. Check for Self-Collision
+            for (let i = 1; i < snake.length; i++) {
+                if (head.x === snake[i].x && head.y === snake[i].y) {
+                    handleCrash("self");
+                    return;
+                }
+            }
+
+            // Add new head
+            snake.unshift(head);
+
+            // 4. Check for Apple Collision
+            if (head.x === apple.x && head.y === apple.y) {
+                clearInterval(gameLoop); // Pause game for quiz
+                showQuiz();
+                // Tail is *not* removed here. It will be removed ONLY if the quiz is failed.
+            } else {
+                // If no apple is eaten, remove the tail to make it move
+                snake.pop();
+            }
+
+            // 5. Draw Everything
+            draw();
+        }
+
+        function handleCrash(type) {
+            clearInterval(gameLoop);
+            gameActive = false;
+
+            if (lives > 0) {
+                lives--;
+                infoLives.textContent = `Lives: ${lives + 1}`; // Display actual total lives remaining (including current)
+
+                // Flash screen red for a second
+                canvas.style.backgroundColor = '#e74c3c';
+                setTimeout(() => {
+                    canvas.style.backgroundColor = '#34495e';
+                    restartAttempt();
+                }, 1000);
+            } else {
+                showGameOverScreen(type);
+            }
+        }
+
+        function restartAttempt() {
+            // Reset position and speed, keep score and lives
+            snake = [{ x: 10, y: 10 }];
+            velocityX = 1;
+            velocityY = 0;
+            placeApple();
+            gameActive = true;
+            gameLoop = setInterval(game, 1000 / 15);
+        }
+        
+        function showWinScreen() {
+            clearInterval(gameLoop);
+            gameActive = false;
+            document.getElementById('win-score').textContent = score;
+            winScreen.style.display = 'flex';
+        }
+
+        function showGameOverScreen(type) {
+            let message = '';
+            if (type === "wall") {
+                message = "You crashed into the wall! Your dynasty has collapsed.";
+            } else if (type === "self") {
+                message = "You crashed into yourself! Your greed led to your downfall.";
+            } else if (type === "quiz") {
+                message = "You failed the quiz! The lack of knowledge brought your rule to an end.";
+            }
+            
+            document.getElementById('final-score').textContent = score;
+            document.getElementById('game-over-message').textContent = message;
+            gameOverScreen.style.display = 'flex';
+        }
+
+        // --- Drawing Functions ---
+
+        function draw() {
+            // Clear canvas (background)
+            ctx.fillStyle = '#34495e';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw Snake
+            ctx.fillStyle = '#2ecc71'; // Green
+            snake.forEach(segment => {
+                ctx.fillRect(segment.x * gridSize, segment.y * gridSize, gridSize - 1, gridSize - 1);
+            });
+
+            // Draw Apple
+            ctx.fillStyle = '#e74c3c'; // Red
+            ctx.beginPath();
+            // Draw a circle for a better apple look
+            let appleX = apple.x * gridSize + gridSize / 2;
+            let appleY = apple.y * gridSize + gridSize / 2;
+            ctx.arc(appleX, appleY, gridSize / 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // --- Input Handling ---
+
+        function keyPush(event) {
+            if (!gameActive) return;
+
+            // Only allow movement in a direction that is not directly opposite
+            switch (event.key) {
+                case 'ArrowLeft':
+                    if (velocityX === 1) return;
+                    velocityX = -1;
+                    velocityY = 0;
+                    break;
+                case 'ArrowUp':
+                    if (velocityY === 1) return;
+                    velocityX = 0;
+                    velocityY = -1;
+                    break;
+                case 'ArrowRight':
+                    if (velocityX === -1) return;
+                    velocityX = 1;
+                    velocityY = 0;
+                    break;
+                case 'ArrowDown':
+                    if (velocityY === -1) return;
+                    velocityX = 0;
+                    velocityY = 1;
+                    break;
+            }
+        }
+
+        // --- Quiz Logic ---
+
+        let currentQuestion = null;
+
+        function showQuiz() {
+            // Get a random question that hasn't been used recently (simple logic)
+            const availableQuestions = quizQuestions.filter(q => q !== currentQuestion);
+            currentQuestion = availableQuestions[Math.floor(Math.random() * availableQuestions.length)];
+
+            document.getElementById('quiz-question').textContent = currentQuestion.question;
+            document.getElementById('quiz-message').textContent = '';
+
+            const optionsDiv = document.getElementById('quiz-options');
+            optionsDiv.innerHTML = '';
+            
+            // Randomize options
+            const shuffledOptions = [...currentQuestion.options].sort(() => Math.random() - 0.5);
+
+            shuffledOptions.forEach(optionText => {
+                const button = document.createElement('button');
+                button.className = 'quiz-option';
+                button.textContent = optionText;
+                button.onclick = () => checkAnswer(optionText, currentQuestion.answer, button);
+                optionsDiv.appendChild(button);
+            });
+
+            quizModal.style.display = 'flex';
+        }
+
+        function checkAnswer(selected, correct, button) {
+            const messageElement = document.getElementById('quiz-message');
+            // Disable all buttons to prevent multiple clicks
+            document.querySelectorAll('.quiz-option').forEach(btn => btn.disabled = true);
+
+            if (selected === correct) {
+                button.style.backgroundColor = '#2ecc71'; // Green for correct
+                messageElement.textContent = "Correct! The Dynasty endures. (+1 Score)";
+                
+                score++;
+                infoScore.textContent = `Score: ${score}`;
+
+                // Check for WIN CONDITION
+                if (score >= WIN_SCORE) {
+                    setTimeout(() => {
+                        quizModal.style.display = 'none';
+                        showWinScreen(); // Call the victory function
+                    }, 1500);
+                    return; 
+                }
+                // End WIN CONDITION check
+
+                setTimeout(() => {
+                    quizModal.style.display = 'none';
+                    placeApple(); // Place new apple
+                    gameActive = true;
+                    gameLoop = setInterval(game, 1000 / 15); // Resume game
+                }, 1500);
+
+            } else {
+                button.style.backgroundColor = '#e74c3c'; // Red for incorrect
+                document.querySelectorAll('.quiz-option').forEach(btn => {
+                    if (btn.textContent === correct) {
+                        btn.style.backgroundColor = '#2ecc71'; // Show correct answer
+                    }
+                });
+                messageElement.textContent = "Incorrect! The Dynasty is weakened.";
+
+                // If the quiz is failed, the snake does NOT grow (tail is removed)
+                snake.pop(); 
+
+                setTimeout(() => {
+                    quizModal.style.display = 'none';
+                    if (lives > 0) {
+                        handleCrash("quiz"); // Uses life
+                    } else {
+                        showGameOverScreen("quiz"); // Final game over
+                    }
+                }, 2500);
+            }
+        }
+
+        // Initial setup to display the starting screen
+        document.addEventListener('DOMContentLoaded', () => {
+            // Set initial lives displayed
+            infoLives.textContent = `Lives: ${lives + 1}`;
+            infoScore.textContent = `Score: 0`;
+        });
+    </script>
+</body>
+</html>
